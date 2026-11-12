@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>OUTBREAK 3D — Zone 07</title>
+<style>
+*{box-sizing:border-box;touch-action:none}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070b09;color:#e9eee9;font-family:system-ui,-apple-system,sans-serif}
+#game{position:fixed;inset:0}canvas{display:block;width:100%;height:100%}
+#top{position:fixed;top:env(safe-area-inset-top,8px);left:0;right:0;display:flex;justify-content:space-between;padding:12px 14px;pointer-events:none;text-shadow:0 2px 5px #000}
+.logo{font-weight:900;letter-spacing:3px}.small{font-size:10px;letter-spacing:2px;color:#a7b6aa}
+#stats{font-size:12px;text-align:right;line-height:1.7}
+#hint{position:fixed;top:75px;left:50%;transform:translateX(-50%);background:#07100dcc;border:1px solid #526355;border-radius:7px;padding:8px 12px;font-size:12px;text-align:center;max-width:85%;pointer-events:none}
+#controls{position:fixed;bottom:calc(12px + env(safe-area-inset-bottom,0px));left:0;right:0;display:flex;justify-content:space-between;align-items:end;padding:0 14px;gap:12px}
+#stick{width:142px;height:142px;position:relative;border-radius:50%;background:#18251dbb;border:1px solid #81918188}
+#nub{position:absolute;width:54px;height:54px;border-radius:50%;background:#829787cc;border:2px solid #d1ded1;left:43px;top:43px}
+.actions{display:grid;grid-template-columns:repeat(2,76px);gap:8px}
+button{border:1px solid #819384;background:#1a2a20dd;color:white;border-radius:9px;padding:12px 8px;font-weight:800;font-size:11px;min-height:46px}
+button:active{background:#55745c}
+#intro,#ending{position:fixed;inset:0;background:linear-gradient(#07100ddc,#07100df2);display:flex;align-items:center;justify-content:center;padding:25px;text-align:center}
+.panel{max-width:440px;border:1px solid #53695a;background:#101a15f2;padding:25px;border-radius:14px;box-shadow:0 20px 80px #000}
+h1{font-size:clamp(34px,9vw,58px);letter-spacing:5px;margin:4px 0;color:#e0e9df}
+p{color:#c1cec3;line-height:1.55;font-size:14px}
+.start{background:#863b32;border-color:#c77d68;padding:14px 24px;font-size:13px;letter-spacing:1px}
+#ending{display:none}
+#cross{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);font-size:22px;color:#e7eee2aa;pointer-events:none}
+@media(min-width:800px){#stick{width:120px;height:120px}#nub{left:34px;top:34px}}
+</style>
+</head>
+<body>
+<div id="game"></div><div id="cross">+</div>
+<div id="top"><div><div class="logo">OUTBREAK</div><div class="small">ZONE 07 // SURVIVAL HORROR</div></div><div id="stats">♥ 100 PV<br>PISTOLET · 12 / 36</div></div>
+<div id="hint">Le complexe est abandonné. Trouve la carte d'accès.</div>
+<div id="controls"><div id="stick"><div id="nub"></div></div><div class="actions"><button id="fire">TIRER</button><button id="reload">RECHARGER</button><button id="swap">FUSIL À POMPE</button><button id="run">COURIR</button></div></div>
+<div id="intro"><div class="panel"><div class="small">RACON — CHAPITRE 01</div><h1>OUTBREAK 3D</h1><p>Un signal de détresse provient du laboratoire souterrain de la Zone 07. Tu es envoyé seul pour récupérer les données de recherche. Mais quelque chose a survécu à l'incident.</p><p><b>Objectif :</b> explore le laboratoire, récupère la carte d'accès et atteins la porte d'évacuation. Deux armes sont disponibles.</p><button class="start" id="start">ENTRER DANS LA ZONE</button><p class="small">Déplacement : joystick à gauche · Viser : glisser sur l'écran · Tir : bouton à droite</p></div></div>
+<div id="ending"><div class="panel"><div class="small">RAPPORT DE MISSION</div><h1 id="endtitle">MISSION</h1><p id="endtext"></p><button class="start" onclick="location.reload()">RECOMMENCER</button></div></div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script>
+(()=>{
+const host=document.getElementById('game'),hint=document.getElementById('hint'),stats=document.getElementById('stats');
+if(!window.THREE){hint.textContent="Connexion nécessaire pour charger le moteur 3D. Ouvre ce jeu dans Safari avec Internet.";return}
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x101914);scene.fog=new THREE.FogExp2(0x101914,.035);
+const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,100);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputEncoding=THREE.sRGBEncoding;host.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0x9aaf9d,0x20251e,1.15));
+const moon=new THREE.DirectionalLight(0xc2d6c5,1.3);moon.position.set(-5,12,5);moon.castShadow=true;scene.add(moon);
+const lamp=new THREE.PointLight(0xb6d6a5,2.2,12);scene.add(lamp);
+const mat=(color,rough=.85)=>new THREE.MeshStandardMaterial({color,roughness:rough});
+const floorMat=mat(0x344039),wallMat=mat(0x46544b),darkMat=mat(0x1b2921),metal=mat(0x68766c,.55);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(42,42),floorMat);floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;scene.add(floor);
+function box(x,y,z,sx,sy,sz,m){let o=new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;scene.add(o);return o}
+box(0,3,-13,30,6,.7,wallMat);box(0,3,13,30,6,.7,wallMat);box(-15,3,0,.7,6,26,wallMat);box(15,3,0,.7,6,26,wallMat);
+// partitions and door frames
+box(-5,1.5,-5,.5,3,10,wallMat);box(5,1.5,4,.5,3,10,wallMat);box(0,1.5,1,7,3,.5,wallMat);
+for(let i=0;i<7;i++){let x=-11+i*3.6;box(x,5.85,-9,.08,.08,1.5,metal);let light=new THREE.PointLight(0xc5d5b7,.65,7);light.position.set(x,5.4,-8);scene.add(light)}
+// crates, consoles and warning panels
+for(let [x,z] of [[-10,-2],[-8,8],[10,-6],[9,8],[-2,9]])box(x,.7,z,1.5,1.4,1.5,darkMat);
+for(let [x,z] of [[-12,-10],[12,-10],[-12,10],[12,10]]){let p=box(x,1.1,z,1.1,2.2,.35,metal);let glow=new THREE.PointLight(0x8d3028,.7,4);glow.position.set(x,2,z);scene.add(glow)}
+// exit door
+const exit=box(0,1.6,-12.55,2.8,3.2,.2,mat(0x8b3930));exit.userData.exit=true;
+const player=new THREE.Group();scene.add(player);
+const body=new THREE.Mesh(new THREE.CapsuleGeometry(.42,.8,4,8),mat(0x334a3b));body.position.y=1.15;body.castShadow=true;player.add(body);
+const head=new THREE.Mesh(new THREE.SphereGeometry(.29,16,12),mat(0xb9b9a5));head.position.y=1.9;head.castShadow=true;player.add(head);
+const pack=new THREE.Mesh(new THREE.BoxGeometry(.55,.65,.3),mat(0x202b24));pack.position.set(0,1.2,.43);player.add(pack);
+const gun=new THREE.Group();player.add(gun);let gunBody=new THREE.Mesh(new THREE.BoxGeometry(.16,.17,.65),metal);gunBody.position.set(.35,1.35,-.48);gun.add(gunBody);
+let barrel=new THREE.Mesh(new THREE.CylinderGeometry(.035,.035,.45,8),mat(0x151a17));barrel.rotation.x=Math.PI/2;barrel.position.set(.35,1.37,-.95);gun.add(barrel);
+player.position.set(0,0,9);
+let zombies=[];
+function zombie(x,z){let g=new THREE.Group();scene.add(g);g.position.set(x,0,z);let skin=mat(0x71836a),rag=mat(0x39443a),eye=mat(0xc44b3d,.4);let torso=new THREE.Mesh(new THREE.CapsuleGeometry(.4,.65,4,8),rag);torso.position.y=1.05;torso.castShadow=true;g.add(torso);let h=new THREE.Mesh(new THREE.SphereGeometry(.28,12,10),skin);h.position.y=1.75;g.add(h);for(let s of [-1,1]){let e=new THREE.Mesh(new THREE.SphereGeometry(.045,8,8),eye);e.position.set(s*.1,1.78,-.24);g.add(e);let arm=new THREE.Mesh(new THREE.CapsuleGeometry(.12,.55,3,6),skin);arm.position.set(s*.48,1.15,-.05);arm.rotation.z=s*.4;g.add(arm)}zombies.push({g,hp:100,speed:1.1+Math.random()*.35,attack:0})}
+zombie(-8,-3);zombie(8,0);zombie(2,-9);
+const keyMesh=new THREE.Mesh(new THREE.OctahedronGeometry(.35),mat(0xe1c45e,.3));keyMesh.position.set(-11,.8,7);scene.add(keyMesh);const keyLight=new THREE.PointLight(0xeac85e,1.3,5);keyLight.position.copy(keyMesh.position);scene.add(keyLight);
+let hp=100,ammo=12,reserve=36,shotgun=0,sgAmmo=4,sgReserve=12,hasKey=false,started=false,ended=false,fireWait=0,run=false;
+function say(t){hint.textContent=t;hint.style.opacity=1;clearTimeout(say.timer);say.timer=setTimeout(()=>hint.style.opacity=.55,2600)}
+function updateHud(){stats.innerHTML=`♥ ${Math.ceil(hp)} PV<br>${shotgun?'FUSIL À POMPE':'PISTOLET'} · ${shotgun?sgAmmo+'/'+sgReserve:ammo+'/'+reserve}<br>${hasKey?'CARTE : OK':'CARTE : MANQUANTE'}`}
+function finish(win){ended=true;document.getElementById('ending').style.display='flex';document.getElementById('endtitle').textContent=win?'ÉVACUATION':'MISSION ÉCHOUÉE';document.getElementById('endtext').textContent=win?'Tu as quitté le laboratoire. Mais le signal continue d’émettre depuis les profondeurs…':'Les infectés ont pris le dessus. La Zone 07 est perdue.'}
+function fire(){if(!started||ended||fireWait>0)return;let a=shotgun?sgAmmo:ammo;if(a<=0){say('Chargeur vide. Recharge !');return}if(shotgun)sgAmmo--;else ammo--;fireWait=shotgun?.75:.28;let origin=new THREE.Vector3();camera.getWorldDirection(origin);let ray=new THREE.Raycaster(camera.position,origin,0,shotgun?13:24);let targets=zombies.filter(z=>z.hp>0).map(z=>z.g);let hits=ray.intersectObjects(targets,true);if(hits.length){let target=zombies.find(z=>z.g===hits[0].object.parent||z.g===hits[0].object.parent?.parent);if(!target){let ob=hits[0].object;target=zombies.find(z=>z.g===ob.parent)}if(target){target.hp-=shotgun?55:38;if(target.hp<=0){scene.remove(target.g);say('Infecté neutralisé.')}else say('Touché !')}}else say('Tir !');updateHud()}
+function reload(){if(shotgun){let n=Math.min(4-sgAmmo,sgReserve);sgAmmo+=n;sgReserve-=n}else{let n=Math.min(12-ammo,reserve);ammo+=n;reserve-=n}say('Rechargement…');updateHud()}
+document.getElementById('fire').onpointerdown=e=>{e.preventDefault();fire()};document.getElementById('reload').onclick=reload;document.getElementById('swap').onclick=()=>{shotgun=1-shotgun;gunBody.scale.set(shotgun?1.7:1,shotgun?1.3:1,shotgun?1.5:1);say(shotgun?'Fusil à pompe équipé':'Pistolet équipé');updateHud()};document.getElementById('run').onpointerdown=()=>run=true;document.getElementById('run').onpointerup=()=>run=false;
+document.getElementById('start').onclick=()=>{started=true;document.getElementById('intro').style.display='none';say('Explore le laboratoire. La carte est signalée par une lumière dorée.')};
+let stick=document.getElementById('stick'),nub=document.getElementById('nub'),joy={x:0,y:0},drag=false;
+function joystick(e){let r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,dx=e.clientX-cx,dy=e.clientY-cy,l=Math.hypot(dx,dy),max=46;if(l>max){dx=dx/l*max;dy=dy/l*max}joy.x=dx/max;joy.y=dy/max;nub.style.transform=`translate(${dx}px,${dy}px)`}
+stick.onpointerdown=e=>{drag=true;stick.setPointerCapture(e.pointerId);joystick(e)};stick.onpointermove=e=>{if(drag)joystick(e)};stick.onpointerup=stick.onpointercancel=()=>{drag=false;joy.x=joy.y=0;nub.style.transform=''};
+let lookDrag=false,lastX=0;renderer.domElement.addEventListener('pointerdown',e=>{if(e.clientX<innerWidth*.4)return;lookDrag=true;lastX=e.clientX});renderer.domElement.addEventListener('pointermove',e=>{if(lookDrag){let dx=e.clientX-lastX;player.rotation.y-=dx*.008;lastX=e.clientX}});window.addEventListener('pointerup',()=>lookDrag=false);
+const clock=new THREE.Clock(),forward=new THREE.Vector3(),right=new THREE.Vector3();
+function loop(){requestAnimationFrame(loop);let dt=Math.min(clock.getDelta(),.04);if(started&&!ended){fireWait=Math.max(0,fireWait-dt);let speed=run?5.2:3.1;forward.set(-Math.sin(player.rotation.y),0,-Math.cos(player.rotation.y));right.set(Math.cos(player.rotation.y),0,-Math.sin(player.rotation.y));let v=new THREE.Vector3().addScaledVector(forward,-joy.y).addScaledVector(right,joy.x);if(v.length()>0){v.normalize().multiplyScalar(speed*dt);let nx=player.position.x+v.x,nz=player.position.z+v.z;if(Math.abs(nx)<13.7&&Math.abs(nz)<11.8){player.position.x=nx;player.position.z=nz}if(Math.abs(joy.x)+Math.abs(joy.y)>.2)player.rotation.y=Math.atan2(-v.x,-v.z)}
+for(let z of zombies){if(z.hp<=0)continue;let d=z.g.position.distanceTo(player.position);if(d>1.25){let dir=new THREE.Vector3().subVectors(player.position,z.g.position).normalize();z.g.position.addScaledVector(dir,z.speed*dt);z.g.lookAt(player.position.x,0,player.position.z)}else{z.attack-=dt;if(z.attack<=0){hp=Math.max(0,hp-9);z.attack=1.1;updateHud();if(hp<=0)finish(false)}}}
+if(!hasKey&&player.position.distanceTo(keyMesh.position)<1.7){hasKey=true;scene.remove(keyMesh);scene.remove(keyLight);say('Carte d’accès récupérée ! La sortie est au nord.');updateHud()}
+if(player.position.z< -10.5&&Math.abs(player.position.x)<2&&hasKey)finish(true);
+}
+let target=new THREE.Vector3(player.position.x,1.3,player.position.z);let offset=new THREE.Vector3(0,4.1,7.2).applyAxisAngle(new THREE.Vector3(0,1,0),player.rotation.y);camera.position.lerp(target.clone().add(offset),.12);camera.lookAt(target);lamp.position.set(player.position.x,3.1,player.position.z);keyMesh.rotation.y+=dt*1.5;renderer.render(scene,camera)}
+loop();window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+updateHud();
+})();
+</script>
+</body>
+</html>
